@@ -10,22 +10,81 @@ import datetime
 import re
 
 WAIT_TIME = 1
+# proxies = {"http": "http://127.0.0.1:8888", "https": "http:127.0.0.1:8888"}
+proxies = {}
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] : %(message)s')
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+headers = {
+    # 'Content-Length': get_content_length(data)
+    # ,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
+    , 'Cache-Control': 'max-age=0'
+    , 'Sec-Fetch-Site': 'same-origin'
+    , 'Sec-Fetch-Mode': 'navigate'
+    , 'Sec-Fetch-User': '?1'
+    , 'Sec-Fetch-Dest': 'document'
+    , 'Accept-Encoding': 'gzip, deflate, br'
+    , 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+}
 
-def order(user_id, login_pwd, trade_pwd):
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] : %(message)s')
-    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-
-    proxies = {"http": "http://127.0.0.1:8888", "https": "http:127.0.0.1:8888"}
-    # proxies = {}
-
-    # ログイン画面
-    url = "https://www.sbisec.co.jp/ETGate"
-    r = requests.get(
+def post(ses, url, headers, data):
+    time.sleep(WAIT_TIME)
+    headers['Content-Length'] = get_content_length(data)
+    return ses.post(
         url
         , proxies=proxies
         , verify=False
+        , data=data
+        , headers=headers
     )
+
+def post(url, headers, data):
+    time.sleep(WAIT_TIME)
+    headers['Content-Length'] = get_content_length(data)
+    return requests.post(
+        url
+        , proxies=proxies
+        , verify=False
+        , data=data
+        , headers=headers
+    )
+
+def get(url, headers, param):
+    time.sleep(WAIT_TIME)
+    headers.pop('Content-Length', None)
+
+    return requests.post(
+        url
+        , proxies=proxies
+        , verify=False
+        , data=data
+        , headers=headers
+    )
+
+def get(url, headers):
+    time.sleep(WAIT_TIME)
+    headers.pop('Content-Length', None)
+
+    return requests.post(
+        url
+        , proxies=proxies
+        , verify=False
+        , headers=headers
+    )
+
+
+def login(user_id, login_pwd, trade_pwd):
+
+    # ログイン画面
+    # url = "https://www.sbisec.co.jp/ETGate"
+    # r = requests.get(
+    #     url
+    #     , proxies=proxies
+    #     , verify=False
+    # )
+
+    r = get('https://www.sbisec.co.jp/ETGate', headers)
 
     ## ログイン押下 ############
     data = {
@@ -42,27 +101,7 @@ def order(user_id, login_pwd, trade_pwd):
         , "user_password": login_pwd
     }
 
-    headers = {
-        'Content-Length': get_content_length(data)
-        ,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
-        , 'Cache-Control': 'max-age=0'
-        , 'Sec-Fetch-Site': 'same-origin'
-        , 'Sec-Fetch-Mode': 'navigate'
-        , 'Sec-Fetch-User': '?1'
-        , 'Sec-Fetch-Dest': 'document'
-        , 'Accept-Encoding': 'gzip, deflate, br'
-        , 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-    }
-
-    time.sleep(WAIT_TIME)
-    r = requests.post(
-        "https://www.sbisec.co.jp/ETGate/"
-        , proxies=proxies
-        , verify=False
-        , data=data
-        , headers=headers
-    )
+    r = post("https://www.sbisec.co.jp/ETGate/", headers, data)
 
     soup = BeautifulSoup(r.content, "html.parser")
     action = soup.find("form", {"name": "formSwitch"})["action"]
@@ -86,7 +125,7 @@ def order(user_id, login_pwd, trade_pwd):
         , "_ReturnPageInfo": "WPLEThmR001Control/DefaultPID/DefaultAID/DSWPLEThmR001Control"
     }
 
-    time.sleep(WAIT_TIME)
+
     ses = requests.session()
     r = ses.post(
         action
@@ -98,7 +137,18 @@ def order(user_id, login_pwd, trade_pwd):
 
     soup = BeautifulSoup(r.content, "html.parser")
     # user_name = soup.find(id='MAINAREA01').find('a').string
-    user_name = user_id
+    # user_name = user_id
+    return ses
+
+def order(ses):
+
+    targets = []
+
+    with open(r'conf\target.txt', 'r') as f:
+        for line in f:
+            if line.rstrip('\n') == 'END':
+                break
+            targets.append(line.rstrip('\n'))
 
     # 一般信用在庫への遷移
     params = {
@@ -158,9 +208,10 @@ def order(user_id, login_pwd, trade_pwd):
     for stock_tag in stock_tags:
         tds = stock_tag.find_all('td')
         # re.search(r'[0-9]*', stock_tag.find_all('td')[1].find('a').text)
-        code =re.search(r'[0-9]+',tds[1].find('a').text).group()
+        code = re.sub('[\\n\\t]','',tds[1].find('a').text)
+        print(code)
         # 在庫　を抽出するところから。
-
+        # remain = re.sub('[\\n\\t]','',tds[4].text)[:1]
 
     exit(0)
 
@@ -493,11 +544,12 @@ def get_content_length(data):
 
 
 if __name__ == '__main__':
-    f = open(r'conf\id.txt', 'r')
-    login_pwd = f.readline().rstrip('\n')
-    trade_pwd = f.readline().rstrip('\n')
-    for line in f:
-        login_id = line.rstrip('\n')
-        order(login_id, login_pwd, trade_pwd)
 
-    f.close()
+    with open(r'conf\id.txt', 'r') as f:
+
+        login_pwd = f.readline().rstrip('\n')
+        trade_pwd = f.readline().rstrip('\n')
+        for line in f:
+            login_id = line.rstrip('\n')
+            ses = login(login_id, login_pwd, trade_pwd)
+            order(ses)
