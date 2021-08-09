@@ -10,14 +10,12 @@ import datetime
 import re
 
 WAIT_TIME = 1
-# proxies = {"http": "http://127.0.0.1:8888", "https": "http:127.0.0.1:8888"}
-proxies = {}
+PROXIES = {"http": "http://127.0.0.1:8888", "https": "http:127.0.0.1:8888"}
+# PROXIES = {}
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] : %(message)s')
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-headers = {
-    # 'Content-Length': get_content_length(data)
-    # ,
+HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
     , 'Cache-Control': 'max-age=0'
     , 'Sec-Fetch-Site': 'same-origin'
@@ -27,51 +25,6 @@ headers = {
     , 'Accept-Encoding': 'gzip, deflate, br'
     , 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
 }
-
-def post(ses, url, headers, data):
-    time.sleep(WAIT_TIME)
-    headers['Content-Length'] = get_content_length(data)
-    return ses.post(
-        url
-        , proxies=proxies
-        , verify=False
-        , data=data
-        , headers=headers
-    )
-
-def post(url, headers, data):
-    time.sleep(WAIT_TIME)
-    headers['Content-Length'] = get_content_length(data)
-    return requests.post(
-        url
-        , proxies=proxies
-        , verify=False
-        , data=data
-        , headers=headers
-    )
-
-def get(url, headers, param):
-    time.sleep(WAIT_TIME)
-    headers.pop('Content-Length', None)
-
-    return requests.post(
-        url
-        , proxies=proxies
-        , verify=False
-        , data=data
-        , headers=headers
-    )
-
-def get(url, headers):
-    time.sleep(WAIT_TIME)
-    headers.pop('Content-Length', None)
-
-    return requests.post(
-        url
-        , proxies=proxies
-        , verify=False
-        , headers=headers
-    )
 
 
 def login(user_id, login_pwd, trade_pwd):
@@ -538,6 +491,82 @@ def order(ses):
         , params=params
     )
 
+def post(ses, url, data):
+    headers = HEADERS
+    headers.update({'Content-Length': get_content_length(data)})
+    r = requests.post(
+        url
+        , proxies=PROXIES
+        , verify=False
+        , data=data
+        , headers=headers
+    )
+    return r
+
+
+def login(login_id, login_pwd):
+
+    data = {
+        "JS_FLG": "0"
+        , "BW_FLG": "0"
+        , "_ControlID": "WPLETlgR001Control"
+        , "_DataStoreID": "DSWPLETlgR001Control"
+        , "_PageID": "WPLETlgR001Rlgn20"
+        , "_ActionID": "login"
+        , "getFlg": "on"
+        , "allPrmFlg": "on"
+        , "_ReturnPageInfo": "WPLEThmR001Control/DefaultPID/DefaultAID/DSWPLEThmR001Control"
+        , "user_id": login_id
+        , "user_password": login_pwd
+    }
+
+    ## ログイン押下 ############
+    time.sleep(WAIT_TIME)
+    ses = requests.session()
+    r = post(ses, 'https://www.sbisec.co.jp/ETGate/', data)
+
+    # r = requests.post(
+    #     "https://www.sbisec.co.jp/ETGate/"
+    #     , proxies=PROXIES
+    #     , verify=False
+    #     , data=data
+    #     , headers=headers
+    # )
+
+    soup = BeautifulSoup(r.content, "html.parser")
+    action = soup.find("form", {"name": "formSwitch"})["action"]
+    ctoken = soup.find("input", {"name": "ctoken"})["value"]
+    login_date_time = soup.find("input", {"name": "LoginDateTime"})["value"]
+    tengun_id = soup.find("input", {"name": "_TENGUN_ID"})["value"]
+
+    # ログイン（フォワード先）
+    data = {
+        "ctoken": ctoken
+        , "LoginDateTime": login_date_time
+        , "_TENGUN_ID": tengun_id
+        , "_ActionID": "login"
+        , "_PageID": "WPLETlgR001Rlgn20"
+        , "BW_FLG": "0"
+        , "allPrmFlg": "on"
+        , "JS_FLG": "0"
+        , "_DataStoreID": "DSWPLETlgR001Control"
+        , "_ControlID": "WPLETlgR001Control"
+        , "getFlg": "on"
+        , "_ReturnPageInfo": "WPLEThmR001Control/DefaultPID/DefaultAID/DSWPLEThmR001Control"
+    }
+
+    time.sleep(WAIT_TIME)
+    # r = ses.post(
+    #     action
+    #     , proxies=PROXIES
+    #     , verify=False
+    #     , headers=headers
+    #     , data=data
+    # )
+    post(ses, action, data)
+
+    return ses
+
 
 def get_content_length(data):
     return str(len(json.dumps(data)) - len(data) * 6 - 2)  # 要素ごとに"""": ,の７文字。後で&と相殺で1要素当たり6文字で計算
@@ -551,5 +580,5 @@ if __name__ == '__main__':
         trade_pwd = f.readline().rstrip('\n')
         for line in f:
             login_id = line.rstrip('\n')
-            ses = login(login_id, login_pwd, trade_pwd)
-            order(ses)
+            ses = login(login_id, login_pwd)
+            exit(0)
